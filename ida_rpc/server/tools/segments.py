@@ -4,6 +4,12 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import register_handler
+from ida_rpc.server.tools.segment_compat import (
+    get_segment,
+    segment_class,
+    segment_name,
+    segment_permissions,
+)
 
 
 def _ida():
@@ -223,12 +229,12 @@ def _handle_list_segments(ctx, args: dict) -> dict:
 
     segments = []
     for seg_ea in idautils.Segments():
-        seg = ida_segment.segment_info_t()
-        if not ida_segment.get_segment_info(seg, seg_ea, ida_segment.GSI_ALL):
+        seg = get_segment(ida_segment, seg_ea)
+        if seg is None:
             continue
-        perm = seg.get_perm()
+        perm = segment_permissions(seg)
         segments.append({
-            "name": seg.get_name() or "",
+            "name": segment_name(ida_segment, seg),
             "start": f"0x{seg.start_ea:x}",
             "end": f"0x{seg.end_ea - 1:x}",
             "size": seg.end_ea - seg.start_ea,
@@ -236,7 +242,7 @@ def _handle_list_segments(ctx, args: dict) -> dict:
             "write": bool(perm & ida_segment.SEGPERM_WRITE),
             "execute": bool(perm & ida_segment.SEGPERM_EXEC),
             "initialized": True,
-            "type": seg.get_sclass() or "DEFAULT",
+            "type": segment_class(ida_segment, seg) or "DEFAULT",
         })
 
     return {"segments": segments, "count": len(segments)}

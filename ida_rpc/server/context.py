@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from ida_rpc.session import Session
+from ida_rpc.server.tools.func_compat import function_start
 
 try:
     import ida_loader
@@ -106,7 +107,7 @@ class IdaContext:
         try:
             ea = self.resolve_address(name_or_address)
             import ida_idaapi
-            func_ea = ida_funcs.get_func_start(ea)
+            func_ea = function_start(ida_funcs, ea, ida_idaapi.BADADDR)
             if func_ea != ida_idaapi.BADADDR:
                 return func_ea
         except ValueError:

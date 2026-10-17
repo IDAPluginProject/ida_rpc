@@ -179,8 +179,11 @@ def start_background(
 
     # Build command to launch IDA with the plugin
     cmd = [str(ida_exe)]
+    ida_log_path = None
     if session.mode == "headless":
         cmd.append("-A")
+        ida_log_path = log_path.with_name(f"{socket_stem}.ida.log")
+        cmd.append(f"-L{ida_log_path}")
         # In headless mode the auto-loaded plugin returns PLUGIN_SKIP,
         # so we must also run it as a script via -S so __name__ == "__main__"
         # and the server actually starts.
@@ -227,7 +230,7 @@ def start_background(
         with open(log_path, "a") as log_fh:
             log_fh.write("ida-rpc launch command: " + " ".join(cmd) + "\n")
             log_fh.flush()
-            subprocess.Popen(
+            process = subprocess.Popen(
                 cmd,
                 stdout=log_fh,
                 stderr=log_fh,
@@ -242,6 +245,25 @@ def start_background(
     while time.time() < deadline:
         if is_running(session.socket_path):
             return
+        returncode = process.poll()
+        if returncode is not None:
+            session_mod.remove(session.project_idb)
+            tails = []
+            for output_path in (ida_log_path, log_path):
+                if output_path is None:
+                    continue
+                try:
+                    output = output_path.read_text(errors="replace")
+                except OSError:
+                    continue
+                if output.strip():
+                    tails.append(f"Last output from {output_path}:\n" + "\n".join(output.splitlines()[-40:]))
+            detail = f"IDA exited with status {returncode} before the daemon became responsive."
+            if tails:
+                detail += "\n" + "\n".join(tails)
+            else:
+                detail += f" Check {log_path} for details."
+            raise RuntimeError(detail)
         time.sleep(0.5)
 
     session_mod.remove(session.project_idb)

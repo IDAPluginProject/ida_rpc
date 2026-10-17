@@ -7,6 +7,7 @@ import os
 import tempfile
 
 from ida_rpc.server.main import register_handler
+from ida_rpc.server.tools.func_compat import function_size, function_start
 
 
 def _ida():
@@ -24,10 +25,10 @@ def _handle_function_graph(ctx, args: dict) -> dict:
         raise ValueError("Missing required argument: func")
 
     func_ea = ctx.find_function(func_name)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found at 0x{func_ea:x}")
 
-    end_ea = func_ea + ida_funcs.calc_func_size_ea(func_ea)
+    end_ea = func_ea + function_size(ida_funcs, func_ea)
 
     # Generate to a temp file and read back
     fd, path = tempfile.mkstemp(suffix=".gdl")

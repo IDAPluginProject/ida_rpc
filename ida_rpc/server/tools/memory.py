@@ -4,6 +4,11 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import register_handler
+from ida_rpc.server.tools.segment_compat import (
+    get_segment,
+    segment_name,
+    segment_permissions,
+)
 
 _MAX_READ_BYTES = 65536
 _MAX_WRITE_BYTES = 4096
@@ -217,12 +222,12 @@ def _handle_memory_map(ctx, args: dict) -> dict:
 
     segments = []
     for seg_ea in idautils.Segments():
-        seg = ida_segment.segment_info_t()
-        if not ida_segment.get_segment_info(seg, seg_ea, ida_segment.GSI_ALL):
+        seg = get_segment(ida_segment, seg_ea)
+        if seg is None:
             continue
-        perm = seg.get_perm()
+        perm = segment_permissions(seg)
         segments.append({
-            "name": seg.get_name() or "",
+            "name": segment_name(ida_segment, seg),
             "start": f"0x{seg.start_ea:x}",
             "end": f"0x{seg.end_ea - 1:x}",
             "size": seg.end_ea - seg.start_ea,

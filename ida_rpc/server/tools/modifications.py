@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import _HANDLERS, register_handler
+from ida_rpc.server.tools.func_compat import function_size, function_start
+from ida_rpc.server.tools.hexrays_compat import decompile_function
 
 
 def _ida():
@@ -217,7 +219,7 @@ def _handle_set_function_signature(ctx, args: dict) -> dict:
                 import ida_hexrays
 
                 if ida_hexrays.init_hexrays_plugin():
-                    cfunc = ida_hexrays.decompile_function(func_ea)
+                    cfunc = decompile_function(ida_hexrays, func_ea)
                     decompiler_sig = str(cfunc.type) if cfunc is not None else ""
                     if decompiler_sig:
                         return {
@@ -344,7 +346,7 @@ def _handle_create_function(ctx, args: dict) -> dict:
     requested_end = ctx.resolve_address(end_str) if end_str else None
 
     def do_create():
-        existing = ida_funcs.get_func_start(addr)
+        existing = function_start(ida_funcs, addr, ida_idaapi.BADADDR)
         if existing != ida_idaapi.BADADDR:
             raise ValueError(f"A function already exists at 0x{addr:x}: {ida_funcs.get_func_name(existing)}")
 
@@ -358,7 +360,7 @@ def _handle_create_function(ctx, args: dict) -> dict:
             end = requested_end
         else:
             end = addr + 1
-            while ida_funcs.get_func_start(end) == ida_idaapi.BADADDR and end < addr + 0x10000:
+            while function_start(ida_funcs, end, ida_idaapi.BADADDR) == ida_idaapi.BADADDR and end < addr + 0x10000:
                 end += 1
 
         success = ida_funcs.add_func(addr, end)
@@ -375,7 +377,7 @@ def _handle_create_function(ctx, args: dict) -> dict:
         return {
             "name": ida_funcs.get_func_name(addr),
             "address": f"0x{addr:x}",
-            "size": ida_funcs.calc_func_size_ea(addr),
+            "size": function_size(ida_funcs, addr),
         }
 
     result = ctx.run_on_main_thread(do_create)
@@ -393,11 +395,11 @@ def _handle_delete_function(ctx, args: dict) -> dict:
         raise ValueError("Missing required argument: target")
 
     func_ea = ctx.find_function(target)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found: {target}")
 
     old_name = ida_funcs.get_func_name(func_ea)
-    old_size = ida_funcs.calc_func_size_ea(func_ea)
+    old_size = function_size(ida_funcs, func_ea)
 
     def do_delete():
         success = ida_funcs.del_func(func_ea)
@@ -425,7 +427,7 @@ def _handle_set_thunk(ctx, args: dict) -> dict:
         raise ValueError("Missing required argument: target")
 
     func_ea = ctx.find_function(target)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found: {target}")
 
     old_flags = ida_funcs.get_func_flags(func_ea)
@@ -473,7 +475,7 @@ def _handle_set_function_flags(ctx, args: dict) -> dict:
     if not target:
         raise ValueError("Missing required argument: target")
     func_ea = ctx.find_function(target)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found: {target}")
 
     old_flags = ida_funcs.get_func_flags(func_ea)

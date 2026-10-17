@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import register_handler
+from ida_rpc.server.tools.func_compat import function_size, function_start
 
 
 def _ida():
@@ -51,7 +52,7 @@ def _handle_xrefs_to(ctx, args: dict) -> dict:
     for ref in idautils.CodeRefsTo(addr, 1):
         if len(xrefs) >= limit:
             break
-        from_func = ida_funcs.get_func_start(ref)
+        from_func = function_start(ida_funcs, ref, ida_idaapi.BADADDR)
         xrefs.append({
             "from_address": f"0x{ref:x}",
             "from_function": ida_funcs.get_func_name(from_func) if from_func != ida_idaapi.BADADDR else None,
@@ -61,7 +62,7 @@ def _handle_xrefs_to(ctx, args: dict) -> dict:
     for ref in idautils.DataRefsTo(addr):
         if len(xrefs) >= limit:
             break
-        from_func = ida_funcs.get_func_start(ref)
+        from_func = function_start(ida_funcs, ref, ida_idaapi.BADADDR)
         xrefs.append({
             "from_address": f"0x{ref:x}",
             "from_function": ida_funcs.get_func_name(from_func) if from_func != ida_idaapi.BADADDR else None,
@@ -86,18 +87,18 @@ def _handle_xrefs_from(ctx, args: dict) -> dict:
     xrefs = []
 
     # Check if target is a function
-    func_ea = ida_funcs.get_func_start(addr)
+    func_ea = function_start(ida_funcs, addr, ida_idaapi.BADADDR)
     if func_ea != ida_idaapi.BADADDR:
-        func_end = func_ea + ida_funcs.calc_func_size_ea(func_ea)
+        func_end = func_ea + function_size(ida_funcs, func_ea)
         # Iterate all instructions in the function
         for head in idautils.Heads(func_ea, func_end):
             for ref in idautils.CodeRefsFrom(head, 0):
                 if len(xrefs) >= limit:
                     break
-                if no_stack and ida_funcs.get_func_start(ref) == ida_idaapi.BADADDR and ref == ida_idaapi.BADADDR:
+                if no_stack and function_start(ida_funcs, ref, ida_idaapi.BADADDR) == ida_idaapi.BADADDR and ref == ida_idaapi.BADADDR:
                     # Heuristic: skip stack references (IDA doesn't have a stack space concept like Ghidra)
                     continue
-                to_func = ida_funcs.get_func_start(ref)
+                to_func = function_start(ida_funcs, ref, ida_idaapi.BADADDR)
                 xrefs.append({
                     "from_address": f"0x{head:x}",
                     "to_address": f"0x{ref:x}",
@@ -107,7 +108,7 @@ def _handle_xrefs_from(ctx, args: dict) -> dict:
             for ref in idautils.DataRefsFrom(head):
                 if len(xrefs) >= limit:
                     break
-                to_func = ida_funcs.get_func_start(ref)
+                to_func = function_start(ida_funcs, ref, ida_idaapi.BADADDR)
                 xrefs.append({
                     "from_address": f"0x{head:x}",
                     "to_address": f"0x{ref:x}",
@@ -121,7 +122,7 @@ def _handle_xrefs_from(ctx, args: dict) -> dict:
         for ref in idautils.CodeRefsFrom(addr, 0):
             if len(xrefs) >= limit:
                 break
-            to_func = ida_funcs.get_func_start(ref)
+            to_func = function_start(ida_funcs, ref, ida_idaapi.BADADDR)
             xrefs.append({
                 "from_address": f"0x{addr:x}",
                 "to_address": f"0x{ref:x}",
@@ -131,7 +132,7 @@ def _handle_xrefs_from(ctx, args: dict) -> dict:
         for ref in idautils.DataRefsFrom(addr):
             if len(xrefs) >= limit:
                 break
-            to_func = ida_funcs.get_func_start(ref)
+            to_func = function_start(ida_funcs, ref, ida_idaapi.BADADDR)
             xrefs.append({
                 "from_address": f"0x{addr:x}",
                 "to_address": f"0x{ref:x}",

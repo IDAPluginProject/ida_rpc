@@ -23,12 +23,11 @@ from pathlib import Path
 # Use realpath to resolve symlinks
 _PLUGIN_FILE = os.path.realpath(__file__)
 _IDA_RPC_DIR = os.path.dirname(_PLUGIN_FILE)
-if _IDA_RPC_DIR not in sys.path:
-    sys.path.insert(0, _IDA_RPC_DIR)
-
 _PROJECT_ROOT = os.path.dirname(_IDA_RPC_DIR)
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
+for _search_path in (_PROJECT_ROOT, _IDA_RPC_DIR):
+    while _search_path in sys.path:
+        sys.path.remove(_search_path)
+    sys.path.insert(0, _search_path)
 
 
 def _drop_stale_ida_rpc_modules() -> None:
@@ -147,17 +146,32 @@ def _configure_segments_for_arch(arch: str) -> None:
         else:
             inf.lflags &= ~idaapi.LFLG_64BIT
 
-    # Apply to all segments (raw binaries typically have one segment)
+    # Apply to all segments (raw binaries typically have one segment). IDA 9.3+
+    # exposes segment_t/getseg(), while older SDKs used segment_info_t and
+    # get_segment_info(). Keep both paths so headless raw imports work across
+    # the supported IDA generations.
     for seg_ea in idautils.Segments():
-        seg = ida_segment.segment_info_t()
-        if not ida_segment.get_segment_info(seg, seg_ea, ida_segment.GSI_ALL):
-            continue
+        legacy_segment_api = hasattr(ida_segment, "segment_info_t")
+        if legacy_segment_api:
+            seg = ida_segment.segment_info_t()
+            if not ida_segment.get_segment_info(seg, seg_ea, ida_segment.GSI_ALL):
+                continue
+        else:
+            seg = ida_segment.getseg(seg_ea)
+            if not seg:
+                continue
 
         # Set segment class
-        ida_segment.set_segment_class(seg_ea, seg_class)
+        if hasattr(ida_segment, "set_segment_class"):
+            ida_segment.set_segment_class(seg_ea, seg_class)
+        else:
+            ida_segment.set_segm_class(seg, seg_class)
 
         # Set bitness (address size)
-        ida_segment.set_segment_addressing(seg_ea, bitness)
+        if hasattr(ida_segment, "set_segment_addressing"):
+            ida_segment.set_segment_addressing(seg_ea, bitness)
+        else:
+            ida_segment.set_segm_addressing(seg, bitness)
 
         if arch_lower in {"aarch64", "arm64", "thumb", "thumb2"}:
             try:
@@ -190,8 +204,12 @@ def _configure_segments_for_arch(arch: str) -> None:
 
         # Set read + execute permissions for code segments
         perm = ida_segment.SEGPERM_READ | ida_segment.SEGPERM_EXEC
-        seg.set_perm(perm)
-        ida_segment.set_segment_info(seg)
+        if hasattr(seg, "set_perm"):
+            seg.set_perm(perm)
+            ida_segment.set_segment_info(seg)
+        else:
+            seg.perm = perm
+            seg.update()
 
     print(f"ida-rpc: configured segments for arch='{arch}' (class={seg_class}, bitness={bitness})")
 

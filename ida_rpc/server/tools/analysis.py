@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import register_handler
+from ida_rpc.server.tools.func_compat import function_size, function_start
+from ida_rpc.server.tools.hexrays_compat import decompile_function
+from ida_rpc.server.tools.segment_compat import get_segment, segment_permissions
 
 
 def _filetype_name(ft: int) -> str:
@@ -53,8 +56,8 @@ def _image_base() -> int:
 
     base_ea = ida_ida.inf_get_min_ea()
     for seg_ea in idautils.Segments():
-        seg = ida_segment.segment_info_t()
-        if ida_segment.get_segment_info(seg, seg_ea) and (seg.get_perm() & ida_segment.SEGPERM_EXEC):
+        seg = get_segment(ida_segment, seg_ea)
+        if seg is not None and (segment_permissions(seg) & ida_segment.SEGPERM_EXEC):
             return seg.start_ea
     return base_ea
 
@@ -135,7 +138,7 @@ def _handle_function(ctx, args: dict) -> dict:
         raise ValueError("Missing required argument: func")
 
     func_ea = ctx.find_function(func_name)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found at 0x{func_ea:x}")
 
     name = ida_funcs.get_func_name(func_ea) or f"sub_{func_ea:x}"
@@ -160,7 +163,7 @@ def _handle_function(ctx, args: dict) -> dict:
             import ida_hexrays
 
             if ida_hexrays.init_hexrays_plugin():
-                cfunc = ida_hexrays.decompile_function(func_ea)
+                cfunc = decompile_function(ida_hexrays, func_ea)
                 if cfunc is not None:
                     prototype = str(cfunc.type) or None
         except Exception:
@@ -169,7 +172,7 @@ def _handle_function(ctx, args: dict) -> dict:
     return {
         "name": name,
         "address": f"0x{func_ea:x}",
-        "size": ida_funcs.calc_func_size_ea(func_ea),
+        "size": function_size(ida_funcs, func_ea),
         "frame_size": frame_size,
         "prototype": prototype,
     }
@@ -214,7 +217,7 @@ def _handle_functions(ctx, args: dict) -> dict:
             "address": f"0x{func_ea:x}",
         }
         if with_body:
-            size = ida_funcs.calc_func_size_ea(func_ea)
+            size = function_size(ida_funcs, func_ea)
             item["body_min"] = f"0x{func_ea:x}"
             item["body_max"] = f"0x{func_ea + size - 1:x}"
             item["body_size"] = size
