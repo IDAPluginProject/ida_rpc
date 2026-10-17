@@ -274,7 +274,7 @@ class TestCliStartArgs:
         assert data["result"]["status"] == "already_running"
         assert str(project) in data["result"]["project"]
 
-    def test_start_passes_raw_base_address_to_ida(self, tmp_path, monkeypatch):
+    def test_start_converts_raw_byte_base_to_ida_paragraphs(self, tmp_path, monkeypatch):
         binary = tmp_path / "sample.bin"
         binary.write_bytes(b"\x00" * 4)
         project = tmp_path / "sample.i64"
@@ -290,13 +290,13 @@ class TestCliStartArgs:
 
         result = self.runner.invoke(cli, [
             "start", str(binary), "--project", str(project),
-            "--arch", "aarch64", "--base", "0x03000000",
+            "--arch", "arm", "--base", "0x40000000",
             "--headless", "--detach",
         ])
 
         assert result.exit_code == 0, result.output
         assert captured["binary_path"] == binary
-        assert captured["extra_ida_args"] == ["-parm", "-b3000000"]
+        assert captured["extra_ida_args"] == ["-parm", "-b4000000"]
 
     def test_start_passes_loader_option_to_ida(self, tmp_path, monkeypatch):
         binary = tmp_path / "sample.bin"
@@ -316,7 +316,7 @@ class TestCliStartArgs:
         ])
 
         assert result.exit_code == 0, result.output
-        assert captured["extra_ida_args"] == ["-parm", "-b3000000", "-TBinary file"]
+        assert captured["extra_ida_args"] == ["-parm", "-b300000", "-TBinary file"]
 
     def test_start_maps_x86_arch_to_ida_metapc_processor(self, tmp_path, monkeypatch):
         binary = tmp_path / "sample.exe"
@@ -389,7 +389,7 @@ class TestCliStartArgs:
 
         assert result.exit_code == 0, result.output
         assert captured["binary_path"] == binary
-        assert captured["extra_ida_args"] == ["-parm", "-b3000000"]
+        assert captured["extra_ida_args"] == ["-parm", "-b300000"]
 
     def test_start_without_detach_launches_ida_for_existing_project(self, tmp_path, monkeypatch):
         project = tmp_path / "sample.i64"

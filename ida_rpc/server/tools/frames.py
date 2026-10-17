@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import register_handler
+from ida_rpc.server.tools.func_compat import function_start
 
 
 def _ida():
@@ -18,7 +19,7 @@ def _ida():
 def _get_func_and_frame(ctx, func_name: str):
     ida_funcs, ida_frame, ida_typeinf, ida_idaapi, idautils = _ida()
     func_ea = ctx.find_function(func_name)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found at 0x{func_ea:x}")
     return func_ea
 

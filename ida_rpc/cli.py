@@ -760,7 +760,7 @@ def start(
         # 32-bit firmware base such as 0x48200000 becomes 0x482000000.
         if base < 0 or base % 0x10:
             _error("InvalidParameter", "--base must be a non-negative 16-byte-aligned address")
-        extra_ida_args.append(f"-b{base:x}")
+        extra_ida_args.append(f"-b{base // 0x10:x}")
     loader_name = _resolve_loader_name(loader)
     if loader_name and imports_binary:
         extra_ida_args.append(f"-T{loader_name}")

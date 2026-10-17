@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import register_handler
+from ida_rpc.server.tools.func_compat import function_size, function_start
+from ida_rpc.server.tools.hexrays_compat import decompile_function
 
 
 def _ida():
@@ -59,7 +61,7 @@ def _handle_function_info(ctx, args: dict) -> dict:
         raise ValueError("Missing required argument: func")
 
     func_ea = ctx.find_function(func_name)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found at 0x{func_ea:x}")
 
     # Basic info
@@ -88,7 +90,7 @@ def _handle_function_info(ctx, args: dict) -> dict:
             import ida_hexrays
 
             if ida_hexrays.init_hexrays_plugin():
-                cfunc = ida_hexrays.decompile_function(func_ea)
+                cfunc = decompile_function(ida_hexrays, func_ea)
                 if cfunc is not None:
                     prototype = str(cfunc.type) or None
         except Exception:
@@ -107,7 +109,7 @@ def _handle_function_info(ctx, args: dict) -> dict:
     chunks = []
     chunks.append({
         "start": f"0x{func_ea:x}",
-        "end": f"0x{func_ea + ida_funcs.calc_func_size_ea(func_ea) - 1:x}",
+        "end": f"0x{func_ea + function_size(ida_funcs, func_ea) - 1:x}",
         "owner": name,
         "primary": True,
     })
@@ -138,7 +140,7 @@ def _handle_function_info(ctx, args: dict) -> dict:
         "name": name,
         "address": f"0x{func_ea:x}",
         "flags": flags_list,
-        "size": ida_funcs.calc_func_size_ea(func_ea),
+        "size": function_size(ida_funcs, func_ea),
         "frame_size": frame_size,
         "ret_size": ret_size,
         "prototype": prototype,
@@ -159,7 +161,7 @@ def _handle_function_items(ctx, args: dict) -> dict:
     limit = int(args.get("limit", 5000))
 
     func_ea = ctx.find_function(func_name)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found at 0x{func_ea:x}")
 
     items = []
@@ -196,14 +198,14 @@ def _handle_function_chunks(ctx, args: dict) -> dict:
         raise ValueError("Missing required argument: func")
 
     func_ea = ctx.find_function(func_name)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found at 0x{func_ea:x}")
 
     name = ida_funcs.get_func_name(func_ea) or f"sub_{func_ea:x}"
     chunks = []
     chunks.append({
         "start": f"0x{func_ea:x}",
-        "end": f"0x{func_ea + ida_funcs.calc_func_size_ea(func_ea):x}",
+        "end": f"0x{func_ea + function_size(ida_funcs, func_ea):x}",
         "owner": name,
         "primary": True,
     })
@@ -234,7 +236,7 @@ def _handle_set_function_color(ctx, args: dict) -> dict:
         raise ValueError("Missing required argument: color")
 
     func_ea = ctx.find_function(func_name)
-    if ida_funcs.get_func_start(func_ea) == ida_idaapi.BADADDR:
+    if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found at 0x{func_ea:x}")
 
     color = int(color_str, 0)
