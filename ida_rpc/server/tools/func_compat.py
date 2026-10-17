@@ -22,3 +22,30 @@ def function_size(ida_funcs, ea: int) -> int:
 
     func = ida_funcs.get_func(ea)
     return ida_funcs.calc_func_size(func) if func is not None else 0
+
+
+def function_flags(ida_funcs, ea: int) -> int:
+    """Read function flags across IDA SDKs."""
+    get_func_flags = getattr(ida_funcs, "get_func_flags", None)
+    if get_func_flags is not None:
+        return int(get_func_flags(ea))
+
+    func = ida_funcs.get_func(ea)
+    return int(func.flags) if func is not None else 0
+
+
+def set_function_flags(ida_funcs, ea: int, flags: int) -> bool:
+    """Write function flags across IDA SDKs."""
+    set_func_flags = getattr(ida_funcs, "set_func_flags", None)
+    if set_func_flags is not None:
+        result = set_func_flags(ea, flags)
+        return True if result is None else bool(result)
+
+    func = ida_funcs.get_func(ea)
+    if func is None:
+        return False
+    update_func = getattr(ida_funcs, "update_func", None)
+    if update_func is None:
+        raise AttributeError("IDA API provides no function-flag update method")
+    func.flags = flags
+    return bool(update_func(func))

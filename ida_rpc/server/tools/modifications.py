@@ -4,7 +4,12 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import _HANDLERS, register_handler
-from ida_rpc.server.tools.func_compat import function_size, function_start
+from ida_rpc.server.tools.func_compat import (
+    function_flags,
+    function_size,
+    function_start,
+    set_function_flags,
+)
 from ida_rpc.server.tools.hexrays_compat import decompile_function
 
 
@@ -430,13 +435,13 @@ def _handle_set_thunk(ctx, args: dict) -> dict:
     if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found: {target}")
 
-    old_flags = ida_funcs.get_func_flags(func_ea)
+    old_flags = function_flags(ida_funcs, func_ea)
     FUNC_THUNK = getattr(ida_funcs, "FUNC_THUNK", 0x00000080)
 
     def do_set():
         if clear:
             new_flags = old_flags & ~FUNC_THUNK
-            ida_funcs.set_func_flags(func_ea, new_flags)
+            set_function_flags(ida_funcs, func_ea, new_flags)
             return {
                 "address": f"0x{func_ea:x}",
                 "name": ida_funcs.get_func_name(func_ea),
@@ -445,7 +450,7 @@ def _handle_set_thunk(ctx, args: dict) -> dict:
             }
         else:
             new_flags = old_flags | FUNC_THUNK
-            ida_funcs.set_func_flags(func_ea, new_flags)
+            set_function_flags(ida_funcs, func_ea, new_flags)
             result = {
                 "address": f"0x{func_ea:x}",
                 "name": ida_funcs.get_func_name(func_ea),
@@ -478,7 +483,7 @@ def _handle_set_function_flags(ctx, args: dict) -> dict:
     if function_start(ida_funcs, func_ea, ida_idaapi.BADADDR) == ida_idaapi.BADADDR:
         raise ValueError(f"Function not found: {target}")
 
-    old_flags = ida_funcs.get_func_flags(func_ea)
+    old_flags = function_flags(ida_funcs, func_ea)
     clear_noreturn = bool(args.get("clear_noreturn", False))
     set_noreturn = bool(args.get("set_noreturn", False))
     if clear_noreturn and set_noreturn:
@@ -491,13 +496,14 @@ def _handle_set_function_flags(ctx, args: dict) -> dict:
         new_flags |= noreturn
 
     def do_set():
-        ida_funcs.set_func_flags(func_ea, new_flags)
+        set_function_flags(ida_funcs, func_ea, new_flags)
+        actual_flags = function_flags(ida_funcs, func_ea)
         return {
             "address": f"0x{func_ea:x}",
             "name": ida_funcs.get_func_name(func_ea),
             "old_flags": old_flags,
-            "new_flags": ida_funcs.get_func_flags(func_ea),
-            "noreturn": bool(ida_funcs.get_func_flags(func_ea) & noreturn),
+            "new_flags": actual_flags,
+            "noreturn": bool(actual_flags & noreturn),
         }
 
     result = ctx.run_on_main_thread(do_set)

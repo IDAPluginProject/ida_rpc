@@ -4,7 +4,11 @@
 from __future__ import annotations
 
 from ida_rpc.server.main import register_handler
-from ida_rpc.server.tools.func_compat import function_size, function_start
+from ida_rpc.server.tools.func_compat import (
+    function_flags,
+    function_size,
+    function_start,
+)
 from ida_rpc.server.tools.hexrays_compat import decompile_function
 
 
@@ -45,12 +49,29 @@ def _func_flags_to_list(flags: int) -> list[str]:
 
 
 def _iter_function_tails(ida_funcs, func):
-    import ida_range
-    tails = ida_range.rangevec_t()
-    if not ida_funcs.get_func_tails(tails, func):
+    # IDA 9.3 removed get_func_tails() in favor of the tail iterator.
+    # Accept either an EA or func_t because callers naturally have the EA,
+    # while the legacy API expects func_t.
+    if isinstance(func, int):
+        func = ida_funcs.get_func(func)
+    if func is None:
         return
-    for tail in tails:
-        yield tail
+
+    get_func_tails = getattr(ida_funcs, "get_func_tails", None)
+    if get_func_tails is not None:
+        import ida_range
+
+        tails = ida_range.rangevec_t()
+        if get_func_tails(tails, func):
+            yield from tails
+        return
+
+    iterator_type = getattr(ida_funcs, "func_tail_iterator_t", None)
+    if iterator_type is None:
+        return
+    for chunk in iterator_type(func):
+        if chunk.start_ea != func.start_ea:
+            yield chunk
 
 
 def _handle_function_info(ctx, args: dict) -> dict:
@@ -66,7 +87,8 @@ def _handle_function_info(ctx, args: dict) -> dict:
 
     # Basic info
     name = ida_funcs.get_func_name(func_ea) or f"sub_{func_ea:x}"
-    flags_list = _func_flags_to_list(ida_funcs.get_func_flags(func_ea))
+    flags = function_flags(ida_funcs, func_ea)
+    flags_list = _func_flags_to_list(flags)
 
     # Frame info
     frame_size = 0
@@ -147,7 +169,7 @@ def _handle_function_info(ctx, args: dict) -> dict:
         "color": color,
         "chunks": chunks,
         "regargs": regargs,
-        "fixed_spd": bool(ida_funcs.get_func_flags(func_ea) & ida_funcs.FUNC_SP_READY),
+        "fixed_spd": bool(flags & ida_funcs.FUNC_SP_READY),
     }
 
 

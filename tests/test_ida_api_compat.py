@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from ida_rpc.server.tools.func_compat import function_start
-from ida_rpc.server.tools.func_compat import function_size
+from ida_rpc.server.tools.func_compat import (
+    function_flags,
+    function_size,
+    function_start,
+    set_function_flags,
+)
 from ida_rpc.server.tools.hexrays_compat import decompile_function
 from ida_rpc.server.tools.segment_compat import (
     get_segment,
@@ -79,6 +83,31 @@ def test_function_size_supports_ida_93_func_t_api():
 
     assert function_size(funcs, 0x4000) == 0x100
     assert function_size(funcs, 0x5000) == 0
+
+
+def test_function_flags_supports_ida_93_func_t_api():
+    func = SimpleNamespace(flags=0x12)
+    updates = []
+    funcs = SimpleNamespace(
+        get_func=lambda ea: func if ea == 0x4000 else None,
+        update_func=lambda item: updates.append(item.flags) or True,
+    )
+
+    assert function_flags(funcs, 0x4000) == 0x12
+    assert set_function_flags(funcs, 0x4000, 0x34)
+    assert func.flags == 0x34
+    assert updates == [0x34]
+    assert function_flags(funcs, 0x5000) == 0
+
+
+def test_function_flags_prefers_legacy_api_when_available():
+    funcs = SimpleNamespace(
+        get_func_flags=lambda ea: ea - 0x4000,
+        set_func_flags=lambda ea, flags: flags == 0x34,
+    )
+
+    assert function_flags(funcs, 0x4004) == 4
+    assert set_function_flags(funcs, 0x4000, 0x34)
 
 
 def test_hexrays_compat_prefers_ida_94_api():
